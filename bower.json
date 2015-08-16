@@ -1,0 +1,24 @@
+{
+  "name": "docxtemplater",
+  "version": "1.0.6",
+  "homepage": "https://github.com/open-xml-templating/docxtemplater",
+  "authors": [
+    "Edgar HIPP <hipp.edg@gmail.com>"
+  ],
+  "description": "Generate docx from templates",
+  "main": "build/docxtemplater-latest.js",
+  "moduleType": [
+    "globals"
+  ],
+  "keywords": [
+    "docx"
+  ],
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ]
+}
