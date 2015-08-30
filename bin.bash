@@ -2,6 +2,10 @@
 
 if [ ! -d src ]; then
 	git clone https://github.com/open-xml-templating/docxtemplater.git src
+else
+	cd src
+	git pull
+	cd ..
 fi
 
 cd src
