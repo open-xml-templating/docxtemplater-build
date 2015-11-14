@@ -2296,6 +2296,9 @@ module.exports = ScopeManager = (function() {
       if (typeof result === 'string') {
         this.useTag(tag, true);
         value = result;
+        if (value.indexOf(this.delimiters.start) !== -1 || value.indexOf(this.delimiters.end) !== -1) {
+          throw new Error("You can't enter " + this.delimiters.start + " or	" + this.delimiters.end + " inside the content of the variable. Tag: " + tag + ", Value: " + result);
+        }
       } else if (typeof result === "number") {
         value = String(result);
       } else {
@@ -2303,7 +2306,7 @@ module.exports = ScopeManager = (function() {
       }
     } else {
       this.useTag(tag, false);
-      return null;
+      value = this.nullGetter(tag);
     }
     return value;
   };
@@ -2358,6 +2361,12 @@ module.exports = SubContent = (function() {
   SubContent.prototype.getInnerTag = function(templaterState) {
     this.start = templaterState.calcPosition(templaterState.tagStart);
     this.end = templaterState.calcPosition(templaterState.tagEnd) + 1;
+    if (this.fullText[this.start] !== '{') {
+      throw new Error("Invalid state near: " + (this.fullText.substr(this.start, 100)));
+    }
+    if (this.fullText[this.end - 1] !== '}') {
+      throw new Error("Invalid state near " + (this.fullText.substr(this.end - 100, 100)));
+    }
     return this.refreshText();
   };
 
@@ -2690,6 +2699,7 @@ module.exports = XmlTemplater = (function() {
       scopeList: this.scopeList,
       parser: this.parser,
       moduleManager: this.moduleManager,
+      nullGetter: this.nullGetter,
       delimiters: this.delimiters
     });
   };
@@ -2816,18 +2826,12 @@ module.exports = XmlTemplater = (function() {
   XmlTemplater.prototype.replaceSimpleTag = function() {
     var newValue;
     newValue = this.scopeManager.getValueFromScope(this.templaterState.textInsideTag);
-    if (newValue == null) {
-      newValue = this.nullGetter(this.templaterState.textInsideTag);
-    }
     return this.content = this.replaceTagByValue(DocUtils.utf8ToWord(newValue), this.content);
   };
 
   XmlTemplater.prototype.replaceSimpleTagRawXml = function() {
     var newText, preContent, startTag, subContent;
     newText = this.scopeManager.getValueFromScope(this.templaterState.tag);
-    if (newText == null) {
-      newText = "";
-    }
     subContent = new SubContent(this.content).getInnerTag(this.templaterState).getOuterXml(this.tagRawXml);
     startTag = subContent.start;
     preContent = this.content.substr(this.lastStart, startTag - this.lastStart);

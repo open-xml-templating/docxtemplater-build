@@ -2358,6 +2358,12 @@ module.exports = SubContent = (function() {
   SubContent.prototype.getInnerTag = function(templaterState) {
     this.start = templaterState.calcPosition(templaterState.tagStart);
     this.end = templaterState.calcPosition(templaterState.tagEnd) + 1;
+    if (this.fullText[this.start] !== '{') {
+      throw new Error("Invalid state near: " + (this.fullText.substr(this.start, 100)));
+    }
+    if (this.fullText[this.end - 1] !== '}') {
+      throw new Error("Invalid state near " + (this.fullText.substr(this.end - 100, 100)));
+    }
     return this.refreshText();
   };
 
@@ -2825,9 +2831,6 @@ module.exports = XmlTemplater = (function() {
   XmlTemplater.prototype.replaceSimpleTagRawXml = function() {
     var newText, preContent, startTag, subContent;
     newText = this.scopeManager.getValueFromScope(this.templaterState.tag);
-    if (newText == null) {
-      newText = "";
-    }
     subContent = new SubContent(this.content).getInnerTag(this.templaterState).getOuterXml(this.tagRawXml);
     startTag = subContent.start;
     preContent = this.content.substr(this.lastStart, startTag - this.lastStart);

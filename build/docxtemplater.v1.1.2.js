@@ -2825,9 +2825,6 @@ module.exports = XmlTemplater = (function() {
   XmlTemplater.prototype.replaceSimpleTagRawXml = function() {
     var newText, preContent, startTag, subContent;
     newText = this.scopeManager.getValueFromScope(this.templaterState.tag);
-    if (newText == null) {
-      newText = "";
-    }
     subContent = new SubContent(this.content).getInnerTag(this.templaterState).getOuterXml(this.tagRawXml);
     startTag = subContent.start;
     preContent = this.content.substr(this.lastStart, startTag - this.lastStart);
