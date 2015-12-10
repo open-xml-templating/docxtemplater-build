@@ -1794,9 +1794,7 @@ module.exports = isArray || function (val) {
 };
 
 },{}],5:[function(require,module,exports){
-var CompiledTemplate, Errors;
-
-Errors = require("./errors");
+var CompiledTemplate;
 
 CompiledTemplate = CompiledTemplate = (function() {
   function CompiledTemplate() {
@@ -1810,11 +1808,8 @@ CompiledTemplate = CompiledTemplate = (function() {
   };
 
   CompiledTemplate.prototype.appendTag = function(compiledTag) {
-    var err;
     if (!compiledTag) {
-      err = new Errors.XTInternalError("Compiled tag empty");
-      err.properties.id = "tag_appended_empty";
-      throw err;
+      throw new Error("compiled tag empty!");
     }
     this.compiled = this.compiled.concat(compiledTag.compiled);
     return this;
@@ -1836,11 +1831,8 @@ CompiledTemplate = CompiledTemplate = (function() {
   };
 
   CompiledTemplate.prototype.appendSubTemplate = function(subTemplate, tag, inverted) {
-    var err;
     if (!subTemplate) {
-      err = new Errors.XTInternalError("Subtemplate empty");
-      err.properties.id = "subtemplate_appended_empty";
-      throw err;
+      throw new Error("subTemplate empty!");
     }
     return this.compiled.push({
       type: 'loop',
@@ -1856,7 +1848,7 @@ CompiledTemplate = CompiledTemplate = (function() {
 
 module.exports = CompiledTemplate;
 
-},{"./errors":9}],6:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 var CompiledXmlTag;
 
 CompiledXmlTag = CompiledXmlTag = (function() {
@@ -1922,10 +1914,8 @@ CompiledXmlTag["null"] = function() {
 module.exports = CompiledXmlTag;
 
 },{}],7:[function(require,module,exports){
-var DocUtils, Errors,
+var DocUtils,
   slice = [].slice;
-
-Errors = require("./errors");
 
 DocUtils = {};
 
@@ -2025,6 +2015,16 @@ DocUtils.clone = function(obj) {
   return newInstance;
 };
 
+DocUtils.replaceFirstFrom = function(string, search, replace, from) {
+  var replaced, substr;
+  substr = string.substr(from);
+  replaced = substr.replace(search, replace);
+  if (substr === replaced) {
+    throw new Error("replaced can't be the same as substring");
+  }
+  return string.substr(0, from) + replaced;
+};
+
 DocUtils.convertSpaces = function(s) {
   return s.replace(new RegExp(String.fromCharCode(160), "g"), " ");
 };
@@ -2061,12 +2061,30 @@ DocUtils.sizeOfObject = function(obj) {
   return size;
 };
 
+DocUtils.getOuterXml = function(text, start, end, xmlTag) {
+  var endTag, startTag;
+  endTag = text.indexOf('</' + xmlTag + '>', end);
+  if (endTag === -1) {
+    throw new Error("can't find endTag " + endTag);
+  }
+  endTag += ('</' + xmlTag + '>').length;
+  startTag = Math.max(text.lastIndexOf('<' + xmlTag + '>', start), text.lastIndexOf('<' + xmlTag + ' ', start));
+  if (startTag === -1) {
+    throw new Error("can't find startTag");
+  }
+  return {
+    "text": text.substr(startTag, endTag - startTag),
+    startTag: startTag,
+    endTag: endTag
+  };
+};
+
 DocUtils.encode_utf8 = function(s) {
   return unescape(encodeURIComponent(s));
 };
 
 DocUtils.decode_utf8 = function(s) {
-  var e, err, error;
+  var e, error;
   try {
     if (s === void 0) {
       return void 0;
@@ -2074,12 +2092,9 @@ DocUtils.decode_utf8 = function(s) {
     return decodeURIComponent(escape(DocUtils.convert_spaces(s)));
   } catch (error) {
     e = error;
-    err = new Errors.XTError('Could not decode utf8');
-    err.properties = {
-      toDecode: s,
-      baseErr: e
-    };
-    throw err;
+    console.error(s);
+    console.error('could not decode');
+    throw new Error('end');
   }
 };
 
@@ -2097,7 +2112,7 @@ DocUtils.preg_match_all = DocUtils.pregMatchAll;
 
 module.exports = DocUtils;
 
-},{"./errors":9}],8:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 var DocXTemplater, SubContent, XmlTemplater, xmlUtil,
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
   hasProp = {}.hasOwnProperty;
@@ -2122,7 +2137,11 @@ DocXTemplater = DocXTemplater = (function(superClass) {
     this.currentClass = DocXTemplater;
     this.tagXml = 'w:t';
     this.tagRawXml = 'w:p';
-    this.load(content);
+    if (typeof content === "string") {
+      this.load(content);
+    } else {
+      throw new Error("content must be string!");
+    }
   }
 
   DocXTemplater.prototype.calcIntellegentlyDashElement = function() {
@@ -2144,52 +2163,7 @@ DocXTemplater = DocXTemplater = (function(superClass) {
 
 module.exports = DocXTemplater;
 
-},{"./subContent":12,"./xmlTemplater":15,"./xmlUtil":16}],9:[function(require,module,exports){
-var XTError, XTInternalError, XTScopeParserError, XTTemplateError;
-
-XTError = function(message) {
-  this.name = "GenericError";
-  this.message = message;
-  return this.stack = (new Error()).stack;
-};
-
-XTError.prototype = new Error;
-
-XTTemplateError = function(message) {
-  this.name = "TemplateError";
-  this.message = message;
-  return this.stack = (new Error()).stack;
-};
-
-XTTemplateError.prototype = new XTError;
-
-XTScopeParserError = function(message) {
-  this.name = "ScopeParserError";
-  this.message = message;
-  return this.stack = (new Error()).stack;
-};
-
-XTScopeParserError.prototype = new XTError;
-
-XTInternalError = function(message) {
-  this.name = "InternalError";
-  this.properties = {
-    explanation: "InternalError"
-  };
-  this.message = message;
-  return this.stack = (new Error()).stack;
-};
-
-XTInternalError.prototype = new XTError;
-
-module.exports = {
-  XTError: XTError,
-  XTTemplateError: XTTemplateError,
-  XTInternalError: XTInternalError,
-  XTScopeParserError: XTScopeParserError
-};
-
-},{}],10:[function(require,module,exports){
+},{"./subContent":11,"./xmlTemplater":14,"./xmlUtil":15}],9:[function(require,module,exports){
 var ModuleManager;
 
 module.exports = ModuleManager = (function() {
@@ -2249,12 +2223,10 @@ module.exports = ModuleManager = (function() {
 
 })();
 
-},{}],11:[function(require,module,exports){
-var DocUtils, Errors, ScopeManager;
+},{}],10:[function(require,module,exports){
+var DocUtils, ScopeManager;
 
 DocUtils = require('./docUtils');
-
-Errors = require("./errors");
 
 module.exports = ScopeManager = (function() {
   function ScopeManager(arg) {
@@ -2307,33 +2279,15 @@ module.exports = ScopeManager = (function() {
   };
 
   ScopeManager.prototype.getValue = function(tag, num) {
-    var err, error, error1, error2, parser, result, scope;
+    var e, error, parser, result, scope;
     this.num = num != null ? num : this.scopeList.length - 1;
     scope = this.scopeList[this.num];
     try {
       parser = this.parser(tag);
-    } catch (error1) {
-      error = error1;
-      err = new Errors.XTScopeParserError("Scope parser compilation failed");
-      err.properties = {
-        id: "scopeparser_compilation_failed",
-        tag: tag,
-        explanation: "The scope parser for the tag " + tag + " failed to compile"
-      };
-      throw err;
-    }
-    try {
       result = parser.get(scope);
-    } catch (error2) {
-      error = error2;
-      err = new Errors.XTScopeParserError("Scope parser execution failed");
-      err.properties = {
-        id: "scopeparser_execution_failed",
-        explanation: "The scope parser for the tag " + tag + " failed to execute",
-        scope: scope,
-        tag: tag
-      };
-      throw err;
+    } catch (error) {
+      e = error;
+      result = null;
     }
     if ((result == null) && this.num > 0) {
       return this.getValue(tag, this.num - 1);
@@ -2384,10 +2338,8 @@ module.exports = ScopeManager = (function() {
 
 })();
 
-},{"./docUtils":7,"./errors":9}],12:[function(require,module,exports){
-var Errors, SubContent;
-
-Errors = require("./errors");
+},{"./docUtils":7}],11:[function(require,module,exports){
+var SubContent;
 
 module.exports = SubContent = (function() {
   function SubContent(fullText) {
@@ -2420,31 +2372,16 @@ module.exports = SubContent = (function() {
     return this;
   };
 
-  SubContent.prototype.getErrorProps = function(xmlTag) {
-    return {
-      xmlTag: xmlTag,
-      text: this.fullText,
-      start: this.start,
-      previousEnd: this.end
-    };
-  };
-
   SubContent.prototype.getOuterXml = function(xmlTag) {
-    var endCandidate, err, startCandiate;
-    endCandidate = this.fullText.indexOf('</' + xmlTag + '>', this.end);
-    startCandiate = Math.max(this.fullText.lastIndexOf('<' + xmlTag + '>', this.start), this.fullText.lastIndexOf('<' + xmlTag + ' ', this.start));
-    if (endCandidate === -1) {
-      err = new Errors.XTTemplateError("Can't find endTag");
-      err.properties = this.getErrorProps(xmlTag);
-      throw err;
+    this.end = this.fullText.indexOf('</' + xmlTag + '>', this.end);
+    if (this.end === -1) {
+      throw new Error("can't find endTag " + this.end);
     }
-    if (startCandiate === -1) {
-      err = new Errors.XTTemplateError("Can't find startTag");
-      err.properties = this.getErrorProps(xmlTag);
-      throw err;
+    this.end += ('</' + xmlTag + '>').length;
+    this.start = Math.max(this.fullText.lastIndexOf('<' + xmlTag + '>', this.start), this.fullText.lastIndexOf('<' + xmlTag + ' ', this.start));
+    if (this.start === -1) {
+      throw new Error("can't find startTag");
     }
-    this.end = endCandidate + ('</' + xmlTag + '>').length;
-    this.start = startCandiate;
     return this.refreshText();
   };
 
@@ -2458,12 +2395,10 @@ module.exports = SubContent = (function() {
 
 })();
 
-},{"./errors":9}],13:[function(require,module,exports){
-var DocUtils, Errors, TemplaterState;
+},{}],12:[function(require,module,exports){
+var DocUtils, TemplaterState;
 
 DocUtils = require('./docUtils');
-
-Errors = require("./errors");
 
 module.exports = TemplaterState = (function() {
   function TemplaterState(moduleManager, delimiters) {
@@ -2515,17 +2450,8 @@ module.exports = TemplaterState = (function() {
   };
 
   TemplaterState.prototype.startTag = function() {
-    var err, xtag;
     if (this.inTag === true) {
-      err = new Errors.XTTemplateError("Unclosed tag");
-      xtag = this.textInsideTag;
-      err.properties = {
-        xtag: xtag,
-        id: "unclosed_tag",
-        context: this.context,
-        explanation: "The tag beginning with '" + (xtag.substr(10)) + "' is unclosed"
-      };
-      throw err;
+      throw new Error("Unclosed tag : '" + this.textInsideTag + "'");
     }
     this.currentStep = this.trailSteps[0];
     this.inTag = true;
@@ -2578,21 +2504,14 @@ module.exports = TemplaterState = (function() {
   };
 
   TemplaterState.prototype.endTag = function() {
-    var dashInnerRegex, err;
+    var dashInnerRegex;
     if (this.inTag === false) {
-      err = new Errors.XTTemplateError("Unopened tag");
-      err.properties = {
-        id: "unopened_tag",
-        explanation: "Unopened tag near : '" + (this.context.substr(this.context.length - 10, 10)) + "'",
-        context: this.context
-      };
-      throw err;
+      throw new Error("Unopened tag near : '" + (this.context.substr(this.context.length - 10, 10)) + "'");
     }
     this.inTag = false;
     this.tagEnd = this.currentStep;
     this.textInsideTag = this.textInsideTag.substr(0, this.textInsideTag.length + 1 - this.delimiters.end.length);
     this.textInsideTag = DocUtils.wordToUtf8(this.textInsideTag);
-    this.fullTextTag = this.delimiters.start + this.textInsideTag + this.delimiters.end;
     if (this.loopType() === 'simple') {
       if (this.textInsideTag[0] === '@') {
         this.rawXmlTag = true;
@@ -2635,7 +2554,7 @@ module.exports = TemplaterState = (function() {
 
 })();
 
-},{"./docUtils":7,"./errors":9}],14:[function(require,module,exports){
+},{"./docUtils":7}],13:[function(require,module,exports){
 var DocUtils, XmlMatcher,
   slice = [].slice;
 
@@ -2710,8 +2629,8 @@ module.exports = XmlMatcher = (function() {
 
 })();
 
-},{"./docUtils":7}],15:[function(require,module,exports){
-var CompiledTemplate, CompiledXmlTag, DocUtils, Errors, ModuleManager, ScopeManager, SubContent, TemplaterState, XmlMatcher, XmlTemplater, getFullText;
+},{"./docUtils":7}],14:[function(require,module,exports){
+var CompiledTemplate, CompiledXmlTag, DocUtils, ModuleManager, ScopeManager, SubContent, TemplaterState, XmlMatcher, XmlTemplater;
 
 DocUtils = require('./docUtils');
 
@@ -2729,24 +2648,6 @@ CompiledTemplate = require('./compiledTemplate');
 
 CompiledXmlTag = require('./compiledXmlTag');
 
-Errors = require("./errors");
-
-getFullText = function(content, tagXml) {
-  var match, matcher, output;
-  matcher = new XmlMatcher(content).parse(tagXml);
-  output = (function() {
-    var i, len, ref, results;
-    ref = matcher.matches;
-    results = [];
-    for (i = 0, len = ref.length; i < len; i++) {
-      match = ref[i];
-      results.push(match[2]);
-    }
-    return results;
-  })();
-  return DocUtils.wordToUtf8(DocUtils.convertSpaces(output.join("")));
-};
-
 module.exports = XmlTemplater = (function() {
   function XmlTemplater(content, options) {
     if (content == null) {
@@ -2763,13 +2664,8 @@ module.exports = XmlTemplater = (function() {
   }
 
   XmlTemplater.prototype.load = function(content1) {
-    var err, xmlMatcher;
+    var xmlMatcher;
     this.content = content1;
-    if (typeof this.content !== "string") {
-      err = new Errors.XTInternalError("Content must be a string");
-      err.properties.id = "xmltemplater_content_must_be_string";
-      throw err;
-    }
     xmlMatcher = new XmlMatcher(this.content).parse(this.tagXml);
     this.templaterState.matches = xmlMatcher.matches;
     return this.templaterState.charactersAdded = xmlMatcher.charactersAdded;
@@ -2825,8 +2721,21 @@ module.exports = XmlTemplater = (function() {
     return false;
   };
 
-  XmlTemplater.prototype.getFullText = function() {
-    return getFullText(this.content, this.tagXml);
+  XmlTemplater.prototype.getFullText = function(tagXml) {
+    var match, matcher, output;
+    this.tagXml = tagXml != null ? tagXml : this.tagXml;
+    matcher = new XmlMatcher(this.content).parse(this.tagXml);
+    output = (function() {
+      var i, len, ref, results;
+      ref = matcher.matches;
+      results = [];
+      for (i = 0, len = ref.length; i < len; i++) {
+        match = ref[i];
+        results.push(match[2]);
+      }
+      return results;
+    })();
+    return DocUtils.wordToUtf8(DocUtils.convertSpaces(output.join("")));
   };
 
   XmlTemplater.prototype.updateModuleManager = function() {
@@ -2884,8 +2793,8 @@ module.exports = XmlTemplater = (function() {
         if ((this.sameTags === true && this.templaterState.inTag === false && this.templaterState.trail === this.delimiters.start) || (this.sameTags === false && this.templaterState.trail === this.delimiters.start)) {
           this.templaterState.startTag();
         } else if ((this.sameTags === true && this.templaterState.inTag === true && this.templaterState.trail === this.delimiters.end) || (this.sameTags === false && this.templaterState.trail === this.delimiters.end)) {
-          this.updateModuleManager();
           this.templaterState.endTag();
+          this.updateModuleManager();
           loopType = this.templaterState.loopType();
           if (loopType === 'simple') {
             this.replaceSimpleTag();
@@ -2927,44 +2836,20 @@ module.exports = XmlTemplater = (function() {
   };
 
   XmlTemplater.prototype.replaceSimpleTagRawXml = function() {
-    var err, error, error1, fullText, newText, outerXml, preContent, startTag, subContent;
+    var newText, preContent, startTag, subContent;
     newText = this.scopeManager.getValueFromScope(this.templaterState.tag);
     if (newText == null) {
       newText = this.nullGetter(this.templaterState.tag, {
         tag: 'raw'
       });
     }
-    subContent = new SubContent(this.content);
-    subContent.getInnerTag(this.templaterState);
-    try {
-      outerXml = subContent.getOuterXml(this.tagRawXml);
-    } catch (error1) {
-      error = error1;
-      if (error instanceof Errors.XTTemplateError) {
-        error.properties.id = "raw_tag_outerxml_invalid";
-        error.properties.xtag = this.templaterState.textInsideTag;
-        error.properties.explanation = "The raw tag " + error.properties.xtag + " is not valid in this context.";
-      }
-      throw error;
-    }
-    fullText = getFullText(outerXml.text, this.tagXml);
-    if (this.templaterState.fullTextTag !== fullText) {
-      err = new Errors.XTTemplateError("Raw xml tag should be the only text in paragraph");
-      err.properties = {
-        id: "raw_xml_tag_should_be_only_text_in_paragraph",
-        paragraphContent: fullText,
-        fullTag: this.templaterState.fullTextTag,
-        xtag: this.templaterState.textInsideTag,
-        explanation: "The tag : '" + this.templaterState.fullTextTag + "' should be the the only text in the paragraph (it contains '" + fullText + "')"
-      };
-      throw err;
-    }
-    startTag = outerXml.start;
+    subContent = new SubContent(this.content).getInnerTag(this.templaterState).getOuterXml(this.tagRawXml);
+    startTag = subContent.start;
     preContent = this.content.substr(this.lastStart, startTag - this.lastStart);
     this.compiled.appendText(preContent);
     this.lastStart = startTag;
     this.compiled.appendRaw(this.templaterState.tag);
-    return this.replaceXml(outerXml, newText);
+    return this.replaceXml(subContent, newText);
   };
 
   XmlTemplater.prototype.replaceXml = function(subContent, newText) {
@@ -2985,23 +2870,11 @@ module.exports = XmlTemplater = (function() {
   };
 
   XmlTemplater.prototype.dashLoop = function(elementDashLoop, sharp) {
-    var error, error1, innerXmlText, outerXml, outerXmlText, subContent;
+    var innerXmlText, outerXml, outerXmlText;
     if (sharp == null) {
       sharp = false;
     }
-    subContent = new SubContent(this.content);
-    subContent.getInnerLoop(this.templaterState);
-    try {
-      outerXml = subContent.getOuterXml(elementDashLoop);
-    } catch (error1) {
-      error = error1;
-      if (error instanceof Errors.XTTemplateError) {
-        error.properties.id = "dashloop_tag_outerxml_invalid";
-        error.properties.xtag = this.templaterState.textInsideTag;
-        error.properties.explanation = "The dashLoop tag " + error.properties.xtag + " is not valid in this context.";
-      }
-      throw error;
-    }
+    outerXml = new SubContent(this.content).getInnerLoop(this.templaterState).getOuterXml(elementDashLoop);
     this.templaterState.moveCharacters(0, 0, outerXml.start);
     outerXmlText = outerXml.text;
     innerXmlText = this.deleteOuterTags(outerXmlText, sharp);
@@ -3030,15 +2903,8 @@ module.exports = XmlTemplater = (function() {
     return before + options.insideValue + after;
   };
 
-  XmlTemplater.prototype.replaceFirstFrom = function(string, search, replace, from) {
-    var replaced, substr;
-    substr = string.substr(from);
-    replaced = substr.replace(search, replace);
-    return string.substr(0, from) + replaced;
-  };
-
   XmlTemplater.prototype.replaceXmlTag = function(content, options) {
-    var err, preContent, replacer, startTag;
+    var preContent, replacer, startTag;
     this.templaterState.offset[options.xmlTagNumber] += options.insideValue.length - this.templaterState.matches[options.xmlTagNumber][2].length;
     options.spacePreserve = options.spacePreserve != null ? options.spacePreserve : true;
     options.noStartTag = options.noStartTag != null ? options.noStartTag : false;
@@ -3048,13 +2914,9 @@ module.exports = XmlTemplater = (function() {
     startTag = this.templaterState.calcXmlTagPosition(options.xmlTagNumber);
     this.templaterState.moveCharacters(options.xmlTagNumber + 1, replacer.length, this.templaterState.matches[options.xmlTagNumber][0].length);
     if (content.indexOf(this.templaterState.matches[options.xmlTagNumber][0]) === -1) {
-      err = new Errors.XTInternalError("Match not found in content");
-      err.properties.id = "xmltemplater_replaced_cant_be_same_as_substring";
-      err.properties.expectedMatch = this.templaterState.matches[options.xmlTagNumber][0];
-      err.properties.content = content;
-      throw err;
+      throw new Error("content " + this.templaterState.matches[options.xmlTagNumber][0] + " not found in content");
     }
-    content = this.replaceFirstFrom(content, this.templaterState.matches[options.xmlTagNumber][0], replacer, startTag);
+    content = DocUtils.replaceFirstFrom(content, this.templaterState.matches[options.xmlTagNumber][0], replacer, startTag);
     this.templaterState.matches[options.xmlTagNumber][0] = replacer;
     preContent = content.substr(this.lastStart, startTag - this.lastStart);
     if (this.templaterState.loopType() === "simple") {
@@ -3189,7 +3051,7 @@ module.exports = XmlTemplater = (function() {
 
 })();
 
-},{"./compiledTemplate":5,"./compiledXmlTag":6,"./docUtils":7,"./errors":9,"./moduleManager":10,"./scopeManager":11,"./subContent":12,"./templaterState":13,"./xmlMatcher":14}],16:[function(require,module,exports){
+},{"./compiledTemplate":5,"./compiledXmlTag":6,"./docUtils":7,"./moduleManager":9,"./scopeManager":10,"./subContent":11,"./templaterState":12,"./xmlMatcher":13}],15:[function(require,module,exports){
 var DocUtils, XmlUtil;
 
 DocUtils = require('./docUtils');
@@ -3241,9 +3103,32 @@ XmlUtil.getListXmlElements = function(text, start, end) {
   return result;
 };
 
+XmlUtil.getListDifferenceXmlElements = function(text, start, end) {
+  var scope;
+  if (start == null) {
+    start = 0;
+  }
+  if (end == null) {
+    end = text.length - 1;
+  }
+  scope = this.getListXmlElements(text, start, end);
+  while (1.) {
+    if (scope.length <= 1) {
+      break;
+    }
+    if (scope[0].tag.substr(2) === scope[scope.length - 1].tag.substr(1)) {
+      scope.pop();
+      scope.shift();
+    } else {
+      break;
+    }
+  }
+  return scope;
+};
+
 module.exports = XmlUtil;
 
-},{"./docUtils":7}],17:[function(require,module,exports){
+},{"./docUtils":7}],16:[function(require,module,exports){
 'use strict';
 // private property
 var _keyStr = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
@@ -3315,7 +3200,7 @@ exports.decode = function(input, utf8) {
 
 };
 
-},{}],18:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 'use strict';
 function CompressedObject() {
     this.compressedSize = 0;
@@ -3345,7 +3230,7 @@ CompressedObject.prototype = {
 };
 module.exports = CompressedObject;
 
-},{}],19:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 'use strict';
 exports.STORE = {
     magic: "\x00\x00",
@@ -3360,7 +3245,7 @@ exports.STORE = {
 };
 exports.DEFLATE = require('./flate');
 
-},{"./flate":24}],20:[function(require,module,exports){
+},{"./flate":23}],19:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -3464,7 +3349,7 @@ module.exports = function crc32(input, crc) {
 };
 // vim: set shiftwidth=4 softtabstop=4:
 
-},{"./utils":37}],21:[function(require,module,exports){
+},{"./utils":36}],20:[function(require,module,exports){
 'use strict';
 var utils = require('./utils');
 
@@ -3573,7 +3458,7 @@ DataReader.prototype = {
 };
 module.exports = DataReader;
 
-},{"./utils":37}],22:[function(require,module,exports){
+},{"./utils":36}],21:[function(require,module,exports){
 'use strict';
 exports.base64 = false;
 exports.binary = false;
@@ -3586,7 +3471,7 @@ exports.comment = null;
 exports.unixPermissions = null;
 exports.dosPermissions = null;
 
-},{}],23:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 'use strict';
 var utils = require('./utils');
 
@@ -3693,7 +3578,7 @@ exports.isRegExp = function (object) {
 };
 
 
-},{"./utils":37}],24:[function(require,module,exports){
+},{"./utils":36}],23:[function(require,module,exports){
 'use strict';
 var USE_TYPEDARRAY = (typeof Uint8Array !== 'undefined') && (typeof Uint16Array !== 'undefined') && (typeof Uint32Array !== 'undefined');
 
@@ -3711,7 +3596,7 @@ exports.uncompress =  function(input) {
     return pako.inflateRaw(input);
 };
 
-},{"pako":40}],25:[function(require,module,exports){
+},{"pako":39}],24:[function(require,module,exports){
 'use strict';
 
 var base64 = require('./base64');
@@ -3792,7 +3677,7 @@ JSZip.base64 = {
 JSZip.compressions = require('./compressions');
 module.exports = JSZip;
 
-},{"./base64":17,"./compressions":19,"./defaults":22,"./deprecatedPublicUtils":23,"./load":26,"./object":29,"./support":33}],26:[function(require,module,exports){
+},{"./base64":16,"./compressions":18,"./defaults":21,"./deprecatedPublicUtils":22,"./load":25,"./object":28,"./support":32}],25:[function(require,module,exports){
 'use strict';
 var base64 = require('./base64');
 var ZipEntries = require('./zipEntries');
@@ -3825,7 +3710,7 @@ module.exports = function(data, options) {
     return this;
 };
 
-},{"./base64":17,"./zipEntries":38}],27:[function(require,module,exports){
+},{"./base64":16,"./zipEntries":37}],26:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 module.exports = function(data, encoding){
@@ -3836,7 +3721,7 @@ module.exports.test = function(b){
 };
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":1}],28:[function(require,module,exports){
+},{"buffer":1}],27:[function(require,module,exports){
 'use strict';
 var Uint8ArrayReader = require('./uint8ArrayReader');
 
@@ -3858,7 +3743,7 @@ NodeBufferReader.prototype.readData = function(size) {
 };
 module.exports = NodeBufferReader;
 
-},{"./uint8ArrayReader":34}],29:[function(require,module,exports){
+},{"./uint8ArrayReader":33}],28:[function(require,module,exports){
 'use strict';
 var support = require('./support');
 var utils = require('./utils');
@@ -4743,7 +4628,7 @@ var out = {
 };
 module.exports = out;
 
-},{"./base64":17,"./compressedObject":18,"./compressions":19,"./crc32":20,"./defaults":22,"./nodeBuffer":27,"./signature":30,"./stringWriter":32,"./support":33,"./uint8ArrayWriter":35,"./utf8":36,"./utils":37}],30:[function(require,module,exports){
+},{"./base64":16,"./compressedObject":17,"./compressions":18,"./crc32":19,"./defaults":21,"./nodeBuffer":26,"./signature":29,"./stringWriter":31,"./support":32,"./uint8ArrayWriter":34,"./utf8":35,"./utils":36}],29:[function(require,module,exports){
 'use strict';
 exports.LOCAL_FILE_HEADER = "PK\x03\x04";
 exports.CENTRAL_FILE_HEADER = "PK\x01\x02";
@@ -4752,7 +4637,7 @@ exports.ZIP64_CENTRAL_DIRECTORY_LOCATOR = "PK\x06\x07";
 exports.ZIP64_CENTRAL_DIRECTORY_END = "PK\x06\x06";
 exports.DATA_DESCRIPTOR = "PK\x07\x08";
 
-},{}],31:[function(require,module,exports){
+},{}],30:[function(require,module,exports){
 'use strict';
 var DataReader = require('./dataReader');
 var utils = require('./utils');
@@ -4790,7 +4675,7 @@ StringReader.prototype.readData = function(size) {
 };
 module.exports = StringReader;
 
-},{"./dataReader":21,"./utils":37}],32:[function(require,module,exports){
+},{"./dataReader":20,"./utils":36}],31:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -4822,7 +4707,7 @@ StringWriter.prototype = {
 
 module.exports = StringWriter;
 
-},{"./utils":37}],33:[function(require,module,exports){
+},{"./utils":36}],32:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 exports.base64 = true;
@@ -4860,7 +4745,7 @@ else {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":1}],34:[function(require,module,exports){
+},{"buffer":1}],33:[function(require,module,exports){
 'use strict';
 var DataReader = require('./dataReader');
 
@@ -4909,7 +4794,7 @@ Uint8ArrayReader.prototype.readData = function(size) {
 };
 module.exports = Uint8ArrayReader;
 
-},{"./dataReader":21}],35:[function(require,module,exports){
+},{"./dataReader":20}],34:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -4947,7 +4832,7 @@ Uint8ArrayWriter.prototype = {
 
 module.exports = Uint8ArrayWriter;
 
-},{"./utils":37}],36:[function(require,module,exports){
+},{"./utils":36}],35:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -5156,7 +5041,7 @@ exports.utf8decode = function utf8decode(buf) {
 };
 // vim: set shiftwidth=4 softtabstop=4:
 
-},{"./nodeBuffer":27,"./support":33,"./utils":37}],37:[function(require,module,exports){
+},{"./nodeBuffer":26,"./support":32,"./utils":36}],36:[function(require,module,exports){
 'use strict';
 var support = require('./support');
 var compressions = require('./compressions');
@@ -5484,7 +5369,7 @@ exports.isRegExp = function (object) {
 };
 
 
-},{"./compressions":19,"./nodeBuffer":27,"./support":33}],38:[function(require,module,exports){
+},{"./compressions":18,"./nodeBuffer":26,"./support":32}],37:[function(require,module,exports){
 'use strict';
 var StringReader = require('./stringReader');
 var NodeBufferReader = require('./nodeBufferReader');
@@ -5707,7 +5592,7 @@ ZipEntries.prototype = {
 // }}} end of ZipEntries
 module.exports = ZipEntries;
 
-},{"./nodeBufferReader":28,"./object":29,"./signature":30,"./stringReader":31,"./support":33,"./uint8ArrayReader":34,"./utils":37,"./zipEntry":39}],39:[function(require,module,exports){
+},{"./nodeBufferReader":27,"./object":28,"./signature":29,"./stringReader":30,"./support":32,"./uint8ArrayReader":33,"./utils":36,"./zipEntry":38}],38:[function(require,module,exports){
 'use strict';
 var StringReader = require('./stringReader');
 var utils = require('./utils');
@@ -6019,7 +5904,7 @@ ZipEntry.prototype = {
 };
 module.exports = ZipEntry;
 
-},{"./compressedObject":18,"./object":29,"./stringReader":31,"./utils":37}],40:[function(require,module,exports){
+},{"./compressedObject":17,"./object":28,"./stringReader":30,"./utils":36}],39:[function(require,module,exports){
 // Top level file is just a mixin of submodules & constants
 'use strict';
 
@@ -6035,7 +5920,7 @@ assign(pako, deflate, inflate, constants);
 
 module.exports = pako;
 
-},{"./lib/deflate":41,"./lib/inflate":42,"./lib/utils/common":43,"./lib/zlib/constants":46}],41:[function(require,module,exports){
+},{"./lib/deflate":40,"./lib/inflate":41,"./lib/utils/common":42,"./lib/zlib/constants":45}],40:[function(require,module,exports){
 'use strict';
 
 
@@ -6413,7 +6298,7 @@ exports.deflate = deflate;
 exports.deflateRaw = deflateRaw;
 exports.gzip = gzip;
 
-},{"./utils/common":43,"./utils/strings":44,"./zlib/deflate.js":48,"./zlib/messages":53,"./zlib/zstream":55}],42:[function(require,module,exports){
+},{"./utils/common":42,"./utils/strings":43,"./zlib/deflate.js":47,"./zlib/messages":52,"./zlib/zstream":54}],41:[function(require,module,exports){
 'use strict';
 
 
@@ -6794,7 +6679,7 @@ exports.inflate = inflate;
 exports.inflateRaw = inflateRaw;
 exports.ungzip  = inflate;
 
-},{"./utils/common":43,"./utils/strings":44,"./zlib/constants":46,"./zlib/gzheader":49,"./zlib/inflate.js":51,"./zlib/messages":53,"./zlib/zstream":55}],43:[function(require,module,exports){
+},{"./utils/common":42,"./utils/strings":43,"./zlib/constants":45,"./zlib/gzheader":48,"./zlib/inflate.js":50,"./zlib/messages":52,"./zlib/zstream":54}],42:[function(require,module,exports){
 'use strict';
 
 
@@ -6898,7 +6783,7 @@ exports.setTyped = function (on) {
 
 exports.setTyped(TYPED_OK);
 
-},{}],44:[function(require,module,exports){
+},{}],43:[function(require,module,exports){
 // String encode/decode helpers
 'use strict';
 
@@ -7085,7 +6970,7 @@ exports.utf8border = function(buf, max) {
   return (pos + _utf8len[buf[pos]] > max) ? pos : max;
 };
 
-},{"./common":43}],45:[function(require,module,exports){
+},{"./common":42}],44:[function(require,module,exports){
 'use strict';
 
 // Note: adler32 takes 12% for level 0 and 2% for level 6.
@@ -7119,7 +7004,7 @@ function adler32(adler, buf, len, pos) {
 
 module.exports = adler32;
 
-},{}],46:[function(require,module,exports){
+},{}],45:[function(require,module,exports){
 module.exports = {
 
   /* Allowed flush values; see deflate() and inflate() below for details */
@@ -7168,7 +7053,7 @@ module.exports = {
   //Z_NULL:                 null // Use -1 or null inline, depending on var type
 };
 
-},{}],47:[function(require,module,exports){
+},{}],46:[function(require,module,exports){
 'use strict';
 
 // Note: we can't get significant speed boost here.
@@ -7211,7 +7096,7 @@ function crc32(crc, buf, len, pos) {
 
 module.exports = crc32;
 
-},{}],48:[function(require,module,exports){
+},{}],47:[function(require,module,exports){
 'use strict';
 
 var utils   = require('../utils/common');
@@ -8978,7 +8863,7 @@ exports.deflatePrime = deflatePrime;
 exports.deflateTune = deflateTune;
 */
 
-},{"../utils/common":43,"./adler32":45,"./crc32":47,"./messages":53,"./trees":54}],49:[function(require,module,exports){
+},{"../utils/common":42,"./adler32":44,"./crc32":46,"./messages":52,"./trees":53}],48:[function(require,module,exports){
 'use strict';
 
 
@@ -9020,7 +8905,7 @@ function GZheader() {
 
 module.exports = GZheader;
 
-},{}],50:[function(require,module,exports){
+},{}],49:[function(require,module,exports){
 'use strict';
 
 // See state defs from inflate.js
@@ -9347,7 +9232,7 @@ module.exports = function inflate_fast(strm, start) {
   return;
 };
 
-},{}],51:[function(require,module,exports){
+},{}],50:[function(require,module,exports){
 'use strict';
 
 
@@ -10852,7 +10737,7 @@ exports.inflateSyncPoint = inflateSyncPoint;
 exports.inflateUndermine = inflateUndermine;
 */
 
-},{"../utils/common":43,"./adler32":45,"./crc32":47,"./inffast":50,"./inftrees":52}],52:[function(require,module,exports){
+},{"../utils/common":42,"./adler32":44,"./crc32":46,"./inffast":49,"./inftrees":51}],51:[function(require,module,exports){
 'use strict';
 
 
@@ -11181,7 +11066,7 @@ module.exports = function inflate_table(type, lens, lens_index, codes, table, ta
   return 0;
 };
 
-},{"../utils/common":43}],53:[function(require,module,exports){
+},{"../utils/common":42}],52:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -11196,7 +11081,7 @@ module.exports = {
   '-6':   'incompatible version' /* Z_VERSION_ERROR (-6) */
 };
 
-},{}],54:[function(require,module,exports){
+},{}],53:[function(require,module,exports){
 'use strict';
 
 
@@ -12397,7 +12282,7 @@ exports._tr_flush_block  = _tr_flush_block;
 exports._tr_tally = _tr_tally;
 exports._tr_align = _tr_align;
 
-},{"../utils/common":43}],55:[function(require,module,exports){
+},{"../utils/common":42}],54:[function(require,module,exports){
 'use strict';
 
 
@@ -12573,8 +12458,6 @@ DocxGen.DocXTemplater = require('./docxTemplater');
 
 DocxGen.JSZip = require('jszip');
 
-DocxGen.Errors = require('./errors');
-
 DocxGen.ModuleManager = require('./moduleManager');
 
 DocxGen.XmlTemplater = require('./xmlTemplater');
@@ -12587,5 +12470,5 @@ DocxGen.SubContent = require('./subContent');
 
 module.exports = DocxGen;
 
-},{"./docUtils":7,"./docxTemplater":8,"./errors":9,"./moduleManager":10,"./subContent":12,"./xmlMatcher":14,"./xmlTemplater":15,"./xmlUtil":16,"jszip":25}]},{},[])("/src/js/docxgen.js")
+},{"./docUtils":7,"./docxTemplater":8,"./moduleManager":9,"./subContent":11,"./xmlMatcher":13,"./xmlTemplater":14,"./xmlUtil":15,"jszip":24}]},{},[])("/src/js/docxgen.js")
 });
