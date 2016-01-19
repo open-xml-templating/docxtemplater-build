@@ -1,5 +1,13 @@
 #/usr/bin/bash
 
+npm install -g uglify-js
+
+uglifyversion="$(uglifyjs --version)"
+
+echo "using : $uglifyversion"
+
+[[ "$uglifyversion" =~ "uglify-js 2." ]] || { echo "you need version 2.x of uglifyjs"; exit 1; }
+
 if [ ! -d src ]; then
 	git clone https://github.com/open-xml-templating/docxtemplater.git src
 else
@@ -7,6 +15,8 @@ else
 	git pull
 	cd ..
 fi
+
+mkdir build -p
 
 cd src
 
@@ -26,10 +36,14 @@ do
 	gulp allCoffee
 	npm test
 	result=$?
+	echo "result : $result"
 	cd ..
 	if [ "$result" == "0" ]; then
+		echo "running browserify"
 		browserify -r ./src/js/docxgen.js -s Docxgen > "$filename"
-		uglifyjs "$filename" > "$minfilename"
+		echo "running uglify"
+		uglifyjs "$filename" > "$minfilename" --verbose --ascii-only
+		echo "runned uglify"
 	fi
 	cd src
 done
