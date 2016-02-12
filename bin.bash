@@ -27,7 +27,7 @@ do
 	minfilename="$(pwd)""/build/docxtemplater.""$tag"".min.js"
 	cd src
 	# Skipping versions < 1.0
-	echo "$tag" | grep "v1" || continue
+	echo "$tag" | grep "v[12]" || continue
 	# Skipping Already existing versions
 	if [ -f "$filename" ] && [ -f "$minfilename" ]; then echo "Skipping $tag (file exists)" && continue; fi
 	echo "processing $tag"
