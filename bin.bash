@@ -33,7 +33,7 @@ do
 	echo "processing $tag"
 	git checkout "$tag"
 	npm install
-	gulp allCoffee
+	gulp allCoffee || npm run compile
 	npm test
 	result=$?
 	echo "result : $result"
