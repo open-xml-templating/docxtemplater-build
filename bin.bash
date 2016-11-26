@@ -31,7 +31,7 @@ do
 	minfilename="$(pwd)""/build/docxtemplater.""$tag"".min.js"
 	cd src
 	# Skipping versions < 1.0
-	echo "$tag" | grep "v[12]" || continue
+	echo "$tag" | grep "v[123]" || continue
 	# Skipping Already existing versions
 	if [ -f "$filename" ] && [ -f "$minfilename" ]; then echo "Skipping $tag (file exists)" && continue; fi
 	echo "processing $tag"
@@ -46,7 +46,7 @@ do
 		echo "running browserify"
 		startfilename="./src/js/docxgen.js"
 		[ -f "$startfilename" ] || startfilename="./src/js/docxtemplater.js"
-		browserify -r "$startfilename" -s Docxgen > "$filename"
+		browserify -r "$startfilename" -s docxtemplater > "$filename"
 		echo "running uglify"
 		uglifyjs "$filename" > "$minfilename" --verbose --ascii-only
 		echo "runned uglify"
