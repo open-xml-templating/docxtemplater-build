@@ -3,7 +3,7 @@
 set -e
 set -u
 
-npm install -g uglify-js
+npm install -g uglify-js browserify
 
 uglifyversion="$(uglifyjs --version)"
 
@@ -46,7 +46,7 @@ do
 		echo "running browserify"
 		startfilename="./src/js/docxgen.js"
 		[ -f "$startfilename" ] || startfilename="./src/js/docxtemplater.js"
-		browserify -r "$startfilename" -s docxtemplater > "$filename"
+		browserify -r "$startfilename" -s Docxtemplater > "$filename"
 		echo "running uglify"
 		uglifyjs "$filename" > "$minfilename" --verbose --ascii-only
 		echo "runned uglify"
