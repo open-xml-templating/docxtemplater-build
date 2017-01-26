@@ -31,6 +31,7 @@ DocUtils.defaults = {
 	},
 
 	parser: memoize(parser),
+	intelligentTagging: true,
 	fileType: "docx",
 	delimiters: {
 		start: "{",
@@ -129,10 +130,7 @@ DocUtils.cloneDeep = function (obj) {
 };
 
 DocUtils.concatArrays = function (arrays) {
-	return arrays.reduce(function (result, array) {
-		Array.prototype.push.apply(result, array);
-		return result;
-	}, []);
+	return Array.prototype.concat.apply([], arrays);
 };
 
 var spaceRegexp = new RegExp(String.fromCharCode(160), "g");
@@ -194,8 +192,7 @@ DocUtils.getLeft = function (parsed, element, index) {
 module.exports = DocUtils;
 
 DocUtils.traits = require("./traits");
-DocUtils.moduleWrapper = require("./module-wrapper");
-},{"./errors":2,"./memoize":5,"./module-wrapper":7,"./traits":16,"xmldom":19}],2:[function(require,module,exports){
+},{"./errors":2,"./memoize":5,"./traits":14,"xmldom":17}],2:[function(require,module,exports){
 "use strict";
 
 function XTError(message) {
@@ -238,9 +235,8 @@ module.exports = {
 
 var loopModule = require("./modules/loop");
 var spacePreserveModule = require("./modules/space-preserve");
-var rawXmlModule = require("./modules/rawxml");
+var RawXmlModule = require("./modules/rawxml");
 var expandPairTrait = require("./modules/expand-pair-trait");
-var render = require("./modules/render");
 
 var PptXFileTypeConfig = {
 	getTemplatedFiles: function getTemplatedFiles(zip) {
@@ -255,7 +251,13 @@ var PptXFileTypeConfig = {
 	tagsXmlLexedArray: ["p:sp", "a:tc", "a:tr", "a:table", "a:p", "a:r"],
 	tagRawXml: "p:sp",
 	tagTextXml: "a:t",
-	baseModules: [render, expandPairTrait, rawXmlModule, loopModule]
+	baseModules: [function () {
+		return expandPairTrait;
+	}, function () {
+		return new RawXmlModule();
+	}, function () {
+		return loopModule;
+	}]
 };
 
 var DocXFileTypeConfig = {
@@ -271,18 +273,25 @@ var DocXFileTypeConfig = {
 	tagsXmlLexedArray: ["w:tc", "w:tr", "w:table", "w:p", "w:r"],
 	tagRawXml: "w:p",
 	tagTextXml: "w:t",
-	baseModules: [render, spacePreserveModule, expandPairTrait, rawXmlModule, loopModule]
+	baseModules: [function () {
+		return spacePreserveModule;
+	}, function () {
+		return expandPairTrait;
+	}, function () {
+		return new RawXmlModule();
+	}, function () {
+		return loopModule;
+	}]
 };
 
 module.exports = {
 	docx: DocXFileTypeConfig,
 	pptx: PptXFileTypeConfig
 };
-},{"./modules/expand-pair-trait":8,"./modules/loop":9,"./modules/rawxml":10,"./modules/render":11,"./modules/space-preserve":12}],4:[function(require,module,exports){
+},{"./modules/expand-pair-trait":7,"./modules/loop":8,"./modules/rawxml":9,"./modules/space-preserve":10}],4:[function(require,module,exports){
 "use strict";
 
 var Errors = require("./errors");
-var DocUtils = require("./doc-utils");
 
 function inRange(range, match) {
 	return range[0] <= match.offset && match.offset < range[1];
@@ -324,11 +333,11 @@ function getTag(tag) {
 function tagMatcher(content, textMatchArray, othersMatchArray) {
 	var cursor = 0;
 	var contentLength = content.length;
-	var allMatches = DocUtils.concatArrays([textMatchArray.map(function (tag) {
+	var allMatches = textMatchArray.map(function (tag) {
 		return { tag: tag, text: true };
-	}), othersMatchArray.map(function (tag) {
+	}).concat(othersMatchArray.map(function (tag) {
 		return { tag: tag, text: false };
-	})]).reduce(function (allMatches, t) {
+	})).reduce(function (allMatches, t) {
 		allMatches[t.tag] = t.text;
 		return allMatches;
 	}, {});
@@ -427,7 +436,7 @@ function Reader(innerContentParts) {
 			return offset - part.length;
 		});
 
-		var delimiterMatches = DocUtils.concatArrays([getAllIndexes(_this.full, delimiters.start, "start"), getAllIndexes(_this.full, delimiters.end, "end")]).sort(offsetSort);
+		var delimiterMatches = getAllIndexes(_this.full, delimiters.start, "start").concat(getAllIndexes(_this.full, delimiters.end, "end")).sort(offsetSort);
 		assertDelimiterOrdered(delimiterMatches, _this.full);
 		var delimiterLength = { start: delimiters.start.length, end: delimiters.end.length };
 		var cutNext = 0;
@@ -521,7 +530,7 @@ module.exports = {
 		return parsed;
 	}
 };
-},{"./doc-utils":1,"./errors":2}],5:[function(require,module,exports){
+},{"./errors":2}],5:[function(require,module,exports){
 "use strict";
 
 function memoize(func) {
@@ -582,37 +591,9 @@ module.exports = function (arrays) {
 },{}],7:[function(require,module,exports){
 "use strict";
 
-function emptyFun() {}
-function identity(i) {
-	return i;
-}
-module.exports = function (module) {
-	var defaults = {
-		set: emptyFun,
-		parse: emptyFun,
-		render: emptyFun,
-		getTraits: emptyFun,
-		optionsTransformer: identity,
-		getRenderedMap: identity,
-		postparse: identity
-	};
-	if (Object.keys(defaults).every(function (key) {
-		return !module[key];
-	})) {
-		throw new Error("This module cannot be wrapped, because it doesn't define any of the necessary functions");
-	}
-	Object.keys(defaults).forEach(function (key) {
-		module[key] = module[key] || defaults[key];
-	});
-	return module;
-};
-},{}],8:[function(require,module,exports){
-"use strict";
-
 var traitName = "expandPair";
 var mergeSort = require("../mergesort");
 var DocUtils = require("../doc-utils");
-var wrapper = require("../module-wrapper");
 
 var _require = require("../traits"),
     getExpandToDefault = _require.getExpandToDefault;
@@ -663,8 +644,12 @@ function getPairs(traits) {
 	if (traits.length === 0) {
 		return [];
 	}
-	var countOpen = 1;
 	var firstTrait = traits[0];
+	if (traits.length === 1) {
+		var part = firstTrait.part;
+		throwUnmatchedLoopException({ part: part, location: firstTrait.part.location });
+	}
+	var countOpen = 1;
 	for (var i = 1; i < traits.length; i++) {
 		var currentTrait = traits[i];
 		countOpen += getOpenCountChange(currentTrait.part);
@@ -676,12 +661,9 @@ function getPairs(traits) {
 			return [[firstTrait, currentTrait]].concat(outer);
 		}
 	}
-	var part = firstTrait.part;
-	throwUnmatchedLoopException({ part: part, location: part.location });
 }
 
 var expandPairTrait = {
-	name: "ExpandPairTrait",
 	postparse: function postparse(parsed, _ref) {
 		var getTraits = _ref.getTraits,
 		    _postparse = _ref.postparse;
@@ -728,26 +710,23 @@ var expandPairTrait = {
 				basePart.subparsed = _postparse(innerParts);
 				newParsed.push(basePart);
 				currentPairIndex++;
+				return newParsed;
 			}
 			return newParsed;
 		}, []);
 	}
 };
 
-module.exports = function () {
-	return wrapper(expandPairTrait);
-};
-},{"../doc-utils":1,"../errors":2,"../mergesort":6,"../module-wrapper":7,"../traits":16}],9:[function(require,module,exports){
+module.exports = expandPairTrait;
+},{"../doc-utils":1,"../errors":2,"../mergesort":6,"../traits":14}],8:[function(require,module,exports){
 "use strict";
 
 var DocUtils = require("../doc-utils");
 var dashInnerRegex = /^-([^\s]+)\s(.+)$/;
-var wrapper = require("../module-wrapper");
 
 var moduleName = "loop";
 
 var loopModule = {
-	name: "LoopModule",
 	parse: function parse(placeHolderContent) {
 		var module = moduleName;
 		var type = "placeholder";
@@ -797,10 +776,8 @@ var loopModule = {
 	}
 };
 
-module.exports = function () {
-	return wrapper(loopModule);
-};
-},{"../doc-utils":1,"../module-wrapper":7}],10:[function(require,module,exports){
+module.exports = loopModule;
+},{"../doc-utils":1}],9:[function(require,module,exports){
 "use strict";
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
@@ -811,7 +788,6 @@ var DocUtils = require("../doc-utils");
 var Errors = require("../errors");
 
 var moduleName = "rawxml";
-var wrapper = require("../module-wrapper");
 
 function throwRawTagShouldBeOnlyTextInParagraph(options) {
 	var err = new Errors.XTTemplateError("Raw tag should be the only text in paragraph");
@@ -844,14 +820,12 @@ function getInner(_ref) {
 	return part;
 }
 
-var RawXmlModule = function () {
-	function RawXmlModule() {
-		_classCallCheck(this, RawXmlModule);
-
-		this.name = "RawXmlModule";
+var rawXmlModule = function () {
+	function rawXmlModule() {
+		_classCallCheck(this, rawXmlModule);
 	}
 
-	_createClass(RawXmlModule, [{
+	_createClass(rawXmlModule, [{
 		key: "optionsTransformer",
 		value: function optionsTransformer(options, docxtemplater) {
 			this.fileTypeConfig = docxtemplater.fileTypeConfig;
@@ -885,66 +859,18 @@ var RawXmlModule = function () {
 		}
 	}]);
 
-	return RawXmlModule;
+	return rawXmlModule;
 }();
 
-module.exports = function () {
-	return wrapper(new RawXmlModule());
-};
-},{"../doc-utils":1,"../errors":2,"../module-wrapper":7}],11:[function(require,module,exports){
+module.exports = rawXmlModule;
+},{"../doc-utils":1,"../errors":2}],10:[function(require,module,exports){
 "use strict";
 
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-var wrapper = require("../module-wrapper");
-
-var Render = function () {
-	function Render() {
-		_classCallCheck(this, Render);
-
-		this.name = "Render";
-	}
-
-	_createClass(Render, [{
-		key: "set",
-		value: function set(obj) {
-			if (obj.compiled) {
-				this.compiled = obj.compiled;
-			}
-			if (obj.data != null) {
-				this.data = obj.data;
-			}
-		}
-	}, {
-		key: "getRenderedMap",
-		value: function getRenderedMap(mapper) {
-			var _this = this;
-
-			return Object.keys(this.compiled).reduce(function (mapper, from) {
-				mapper[from] = { from: from, data: _this.data };
-				return mapper;
-			}, mapper);
-		}
-	}]);
-
-	return Render;
-}();
-
-module.exports = function () {
-	return wrapper(new Render());
-};
-},{"../module-wrapper":7}],12:[function(require,module,exports){
-"use strict";
-
-var wrapper = require("../module-wrapper");
 var spacePreserve = {
-	name: "SpacePreserveModule",
 	postparse: function postparse(parsed) {
 		var chunk = [];
 		var inChunk = false;
-		var result = parsed.reduce(function (parsed, part) {
+		return parsed.reduce(function (parsed, part) {
 			if (part.type === "tag" && part.position === "start" && part.text && part.value === "<w:t>") {
 				inChunk = true;
 			}
@@ -962,15 +888,11 @@ var spacePreserve = {
 				chunk = [];
 			}
 			return parsed;
-		}, []);
-		Array.prototype.push.apply(result, chunk);
-		return result;
+		}, []).concat(chunk);
 	}
 };
-module.exports = function () {
-	return wrapper(spacePreserve);
-};
-},{"../module-wrapper":7}],13:[function(require,module,exports){
+module.exports = spacePreserve;
+},{}],11:[function(require,module,exports){
 "use strict";
 
 var DocUtils = require("./doc-utils");
@@ -979,12 +901,12 @@ var parser = {
 	postparse: function postparse(parsed, modules) {
 		function getTraits(traitName, parsed) {
 			return modules.map(function (module) {
-				return module.getTraits(traitName, parsed);
+				return module.getTraits ? module.getTraits(traitName, parsed) : null;
 			});
 		}
 		function postparse(parsed) {
 			return modules.reduce(function (parsed, module) {
-				return module.postparse(parsed, { postparse: postparse, getTraits: getTraits });
+				return module.postparse ? module.postparse(parsed, { postparse: postparse, getTraits: getTraits }) : parsed;
 			}, parsed);
 		}
 		return postparse(parsed);
@@ -994,6 +916,9 @@ var parser = {
 			var moduleParsed = void 0;
 			for (var i = 0, l = modules.length; i < l; i++) {
 				var _module = modules[i];
+				if (!_module.parse) {
+					continue;
+				}
 				moduleParsed = _module.parse(placeHolderContent);
 				if (moduleParsed) {
 					parsed.push(moduleParsed);
@@ -1036,7 +961,7 @@ var parser = {
 };
 
 module.exports = parser;
-},{"./doc-utils":1}],14:[function(require,module,exports){
+},{"./doc-utils":1}],12:[function(require,module,exports){
 "use strict";
 
 var ScopeManager = require("./scope-manager");
@@ -1046,6 +971,9 @@ function moduleRender(part, options) {
 	var moduleRendered = void 0;
 	for (var i = 0, l = options.modules.length; i < l; i++) {
 		var _module = options.modules[i];
+		if (!_module.render) {
+			continue;
+		}
 		moduleRendered = _module.render(part, options);
 		if (moduleRendered) {
 			return moduleRendered;
@@ -1080,7 +1008,7 @@ function render(options) {
 }
 
 module.exports = render;
-},{"./doc-utils":1,"./scope-manager":15}],15:[function(require,module,exports){
+},{"./doc-utils":1,"./scope-manager":13}],13:[function(require,module,exports){
 "use strict";
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
@@ -1207,7 +1135,7 @@ ScopeManager.createBaseScopeManager = function (_ref) {
 };
 
 module.exports = ScopeManager;
-},{"./errors":2}],16:[function(require,module,exports){
+},{"./errors":2}],14:[function(require,module,exports){
 "use strict";
 
 var DocUtils = require("./doc-utils");
@@ -1236,8 +1164,7 @@ function lastTagIsOpenTag(array, tag) {
 }
 
 function addTag(array, tag) {
-	array.push({ tag: tag });
-	return array;
+	return array.concat({ tag: tag });
 }
 
 function getListXmlElements(parts) {
@@ -1301,7 +1228,7 @@ function expandOne(part, postparsed, options) {
 	if (type === "[object Array]") {
 		inner = DocUtils.concatArrays(inner);
 	}
-	return DocUtils.concatArrays([postparsed.slice(0, left), [inner], postparsed.slice(right + 1)]);
+	return DocUtils.concatArrays([postparsed.slice(0, left), inner, postparsed.slice(right + 1)]);
 }
 
 function expandToOne(postparsed, options) {
@@ -1322,7 +1249,7 @@ module.exports = {
 	expandToOne: expandToOne,
 	getExpandToDefault: getExpandToDefault
 };
-},{"./doc-utils":1,"./errors":2}],17:[function(require,module,exports){
+},{"./doc-utils":1,"./errors":2}],15:[function(require,module,exports){
 "use strict";
 // res class responsibility is to parse the XML.
 
@@ -1400,7 +1327,7 @@ var memoized = memoize(xmlMatcher);
 module.exports = function (content, tagsXmlArray) {
 	return DocUtils.cloneDeep(memoized(content, tagsXmlArray));
 };
-},{"./doc-utils":1,"./memoize":5}],18:[function(require,module,exports){
+},{"./doc-utils":1,"./memoize":5}],16:[function(require,module,exports){
 "use strict";
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
@@ -1443,20 +1370,16 @@ module.exports = function () {
 			this.content = content;
 		}
 	}, {
-		key: "setTags",
-		value: function setTags(tags) {
-			this.tags = tags != null ? tags : {};
-			this.scopeManager = ScopeManager.createBaseScopeManager({ tags: this.tags, parser: this.parser });
-			return this;
-		}
-	}, {
 		key: "fromJson",
 		value: function fromJson(options) {
+			this.tags = options.tags != null ? options.tags : {};
 			this.filePath = options.filePath;
 			this.modules = options.modules;
 			this.fileTypeConfig = options.fileTypeConfig;
+			this.scopeManager = ScopeManager.createBaseScopeManager({ tags: this.tags, parser: this.parser });
 			Object.keys(DocUtils.defaults).map(function (key) {
-				this[key] = options[key] != null ? options[key] : DocUtils.defaults[key];
+				var defaultValue = DocUtils.defaults[key];
+				this[key] = options[key] != null ? options[key] : defaultValue;
 			}, this);
 		}
 	}, {
@@ -1468,20 +1391,10 @@ module.exports = function () {
 		key: "setModules",
 		value: function setModules(obj) {
 			this.modules.forEach(function (module) {
-				module.set(obj);
+				if (module.set) {
+					module.set(obj);
+				}
 			});
-		}
-	}, {
-		key: "parse",
-		value: function parse() {
-			this.xmllexed = Lexer.xmlparse(this.content, { text: this.fileTypeConfig.tagsXmlTextArray, other: this.fileTypeConfig.tagsXmlLexedArray });
-			this.setModules({ inspect: { xmllexed: this.xmllexed } });
-			this.lexed = Lexer.parse(this.xmllexed, this.delimiters);
-			this.setModules({ inspect: { lexed: this.lexed } });
-			this.parsed = Parser.parse(this.lexed, this.modules);
-			this.setModules({ inspect: { parsed: this.parsed } });
-			this.postparsed = Parser.postparse(this.parsed, this.modules);
-			return this;
 		}
 		/*
   content is the whole content to be tagged
@@ -1492,6 +1405,13 @@ module.exports = function () {
 	}, {
 		key: "render",
 		value: function render() {
+			this.xmllexed = Lexer.xmlparse(this.content, { text: this.fileTypeConfig.tagsXmlTextArray, other: this.fileTypeConfig.tagsXmlLexedArray });
+			this.setModules({ inspect: { xmllexed: this.xmllexed } });
+			this.lexed = Lexer.parse(this.xmllexed, this.delimiters);
+			this.setModules({ inspect: { lexed: this.lexed } });
+			this.parsed = Parser.parse(this.lexed, this.modules);
+			this.setModules({ inspect: { parsed: this.parsed } });
+			this.postparsed = Parser.postparse(this.parsed, this.modules);
 			this.setModules({ inspect: { postparsed: this.postparsed } });
 			this.content = _render({
 				compiled: this.postparsed,
@@ -1508,7 +1428,7 @@ module.exports = function () {
 
 	return XmlTemplater;
 }();
-},{"./doc-utils":1,"./errors":2,"./lexer":4,"./parser.js":13,"./render.js":14,"./scope-manager":15,"./xml-matcher":17}],19:[function(require,module,exports){
+},{"./doc-utils":1,"./errors":2,"./lexer":4,"./parser.js":11,"./render.js":12,"./scope-manager":13,"./xml-matcher":15}],17:[function(require,module,exports){
 function DOMParser(options){
 	this.options = options ||{locator:{}};
 	
@@ -1761,7 +1681,7 @@ function appendElement (hander,node) {
 	exports.DOMParser = DOMParser;
 //}
 
-},{"./dom":20,"./sax":21}],20:[function(require,module,exports){
+},{"./dom":18,"./sax":19}],18:[function(require,module,exports){
 /*
  * DOM Level 2
  * Object DOMException
@@ -3007,7 +2927,7 @@ try{
 	exports.XMLSerializer = XMLSerializer;
 //}
 
-},{}],21:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 //[4]   	NameStartChar	   ::=   	":" | [A-Z] | "_" | [a-z] | [#xC0-#xD6] | [#xD8-#xF6] | [#xF8-#x2FF] | [#x370-#x37D] | [#x37F-#x1FFF] | [#x200C-#x200D] | [#x2070-#x218F] | [#x2C00-#x2FEF] | [#x3001-#xD7FF] | [#xF900-#xFDCF] | [#xFDF0-#xFFFD] | [#x10000-#xEFFFF]
 //[4a]   	NameChar	   ::=   	NameStartChar | "-" | "." | [0-9] | #xB7 | [#x0300-#x036F] | [#x203F-#x2040]
 //[5]   	Name	   ::=   	NameStartChar (NameChar)*
@@ -3650,7 +3570,6 @@ var _createClass = function () { function defineProperties(target, props) { for 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
 var DocUtils = require("./doc-utils");
-var wrapper = DocUtils.moduleWrapper;
 
 var Docxtemplater = function () {
 	function Docxtemplater() {
@@ -3667,7 +3586,7 @@ var Docxtemplater = function () {
 	_createClass(Docxtemplater, [{
 		key: "attachModule",
 		value: function attachModule(module) {
-			this.modules.push(wrapper(module));
+			this.modules.push(module);
 			return this;
 		}
 	}, {
@@ -3697,11 +3616,11 @@ var Docxtemplater = function () {
 			return this;
 		}
 	}, {
-		key: "compileFile",
-		value: function compileFile(fileName) {
+		key: "renderFile",
+		value: function renderFile(fileName) {
 			var currentFile = this.createTemplateClass(fileName);
-			currentFile.parse();
-			this.compiled[fileName] = currentFile;
+			this.zip.file(fileName, currentFile.render().content);
+			this.compiled[fileName] = currentFile.postparsed;
 		}
 	}, {
 		key: "compile",
@@ -3717,7 +3636,7 @@ var Docxtemplater = function () {
 				return moduleFunction();
 			}).concat(this.modules);
 			this.options = this.modules.reduce(function (options, module) {
-				return module.optionsTransformer(options, _this2);
+				return module.optionsTransformer ? module.optionsTransformer(options, _this2) : options;
 			}, this.options);
 			this.xmlDocuments = this.options.xmlFileNames.reduce(function (xmlDocuments, fileName) {
 				var content = _this2.zip.files[fileName].asText();
@@ -3725,34 +3644,18 @@ var Docxtemplater = function () {
 				return xmlDocuments;
 			}, {});
 			this.modules.forEach(function (module) {
-				module.set({ zip: _this2.zip, xmlDocuments: _this2.xmlDocuments, data: _this2.data });
+				if (module.set) {
+					module.set({ zip: _this2.zip, xmlDocuments: _this2.xmlDocuments });
+				}
 			});
 			this.compile();
-
-			this.modules.forEach(function (module) {
-				module.set({ compiled: _this2.compiled });
-			});
 			// Loop inside all templatedFiles (ie xml files with content).
 			// Sometimes they don't exist (footer.xml for example)
 			this.templatedFiles.forEach(function (fileName) {
 				if (_this2.zip.files[fileName] != null) {
-					_this2.compileFile(fileName);
+					_this2.renderFile(fileName);
 				}
 			});
-
-			this.mapper = this.modules.reduce(function (value, module) {
-				return module.getRenderedMap(value);
-			}, {});
-
-			Object.keys(this.mapper).forEach(function (to) {
-				var mapped = _this2.mapper[to];
-				var from = mapped.from;
-				var currentFile = _this2.compiled[from];
-				currentFile.setTags(mapped.data);
-				currentFile.render();
-				_this2.zip.file(to, currentFile.content);
-			});
-
 			Object.keys(this.xmlDocuments).forEach(function (fileName) {
 				_this2.zip.remove(fileName);
 				var content = DocUtils.encodeUtf8(DocUtils.xml2str(_this2.xmlDocuments[fileName]));
@@ -3762,8 +3665,8 @@ var Docxtemplater = function () {
 		}
 	}, {
 		key: "setData",
-		value: function setData(data) {
-			this.data = data;
+		value: function setData(tags) {
+			this.tags = tags;
 			return this;
 		}
 	}, {
@@ -3783,6 +3686,7 @@ var Docxtemplater = function () {
 			var _this3 = this;
 
 			var xmltOptions = {
+				tags: this.tags,
 				filePath: filePath
 			};
 			Object.keys(DocUtils.defaults).forEach(function (key) {
@@ -3814,5 +3718,5 @@ Docxtemplater.XmlTemplater = require("./xml-templater");
 Docxtemplater.FileTypeConfig = require("./file-type-config");
 Docxtemplater.XmlMatcher = require("./xml-matcher");
 module.exports = Docxtemplater;
-},{"./doc-utils":1,"./errors":2,"./file-type-config":3,"./xml-matcher":17,"./xml-templater":18}]},{},[])("/src/js/docxtemplater.js")
+},{"./doc-utils":1,"./errors":2,"./file-type-config":3,"./xml-matcher":15,"./xml-templater":16}]},{},[])("/src/js/docxtemplater.js")
 });
