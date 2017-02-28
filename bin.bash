@@ -51,11 +51,11 @@ do
 		uglifyjs "$filename" > "$minfilename" --verbose --ascii-only
 		echo "runned uglify"
 	fi
+	# Copy latest tag to docxtemplater-latest.{min,}.js
+	cp "$filename" build/docxtemplater-latest.js
+	cp "$minfilename" build/docxtemplater-latest.min.js
+	git add .
+	git commit -am "$tag"
+	git tag "$tag"
 	cd src
 done
-
-cd ..
-
-# Copy latest tag to docxtemplater-latest.{min,}.js
-cp "$filename" build/docxtemplater-latest.js
-cp "$minfilename" build/docxtemplater-latest.min.js
