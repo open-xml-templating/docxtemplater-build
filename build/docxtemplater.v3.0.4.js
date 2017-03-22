@@ -31,6 +31,7 @@ DocUtils.defaults = {
 	},
 
 	parser: memoize(parser),
+	fileType: "docx",
 	delimiters: {
 		start: "{",
 		end: "}"
@@ -180,8 +181,9 @@ DocUtils.getRight = function (parsed, element, index) {
 };
 
 DocUtils.getLeft = function (parsed, element, index) {
-	for (var i = index; i >= 0; i--) {
-		var part = parsed[i];
+	var parts = parsed.slice(0, index);
+	for (var i = parts.length - 1; i >= 0; i--) {
+		var part = parts[i];
 		if (part.value.indexOf("<" + element) === 0 && [">", " "].indexOf(part.value[element.length + 1]) !== -1) {
 			return i;
 		}
@@ -190,7 +192,10 @@ DocUtils.getLeft = function (parsed, element, index) {
 };
 
 module.exports = DocUtils;
-},{"./errors":2,"./memoize":5,"xmldom":19}],2:[function(require,module,exports){
+
+DocUtils.traits = require("./traits");
+DocUtils.moduleWrapper = require("./module-wrapper");
+},{"./errors":2,"./memoize":5,"./module-wrapper":7,"./traits":16,"xmldom":19}],2:[function(require,module,exports){
 "use strict";
 
 function XTError(message) {
@@ -1215,10 +1220,7 @@ function throwRawTagNotInParagraph(options) {
 		id: "raw_tag_outerxml_invalid",
 		explanation: "The tag \"" + tag + "\"",
 		rootError: options.rootError,
-		xtag: tag,
-		postparsed: options.postparsed,
-		expandTo: options.expandTo,
-		index: options.index
+		xtag: tag
 	};
 	throw err;
 }
@@ -1293,10 +1295,7 @@ function expandOne(part, postparsed, options) {
 		right = DocUtils.getRight(postparsed, expandTo, index);
 		left = DocUtils.getLeft(postparsed, expandTo, index);
 	} catch (rootError) {
-		if (rootError instanceof Errors.XTTemplateError) {
-			throwRawTagNotInParagraph({ part: part, rootError: rootError, postparsed: postparsed, expandTo: expandTo, index: index });
-		}
-		throw rootError;
+		throwRawTagNotInParagraph({ part: part, rootError: rootError });
 	}
 	var leftParts = postparsed.slice(left, index);
 	var rightParts = postparsed.slice(index + 1, right + 1);
@@ -3654,8 +3653,6 @@ var _createClass = function () { function defineProperties(target, props) { for 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
 var DocUtils = require("./doc-utils");
-DocUtils.traits = require("./traits");
-DocUtils.moduleWrapper = require("./module-wrapper");
 var wrapper = DocUtils.moduleWrapper;
 
 var Docxtemplater = function () {
@@ -3686,9 +3683,6 @@ var Docxtemplater = function () {
 				var defaultValue = DocUtils.defaults[key];
 				_this[key] = _this.options[key] != null ? _this.options[key] : defaultValue;
 			});
-			if (this.zip) {
-				this.updateFileTypeConfig();
-			}
 			return this;
 		}
 	}, {
@@ -3698,7 +3692,6 @@ var Docxtemplater = function () {
 				throw new Error("Docxtemplater doesn't handle JSZip version >=3, see changelog");
 			}
 			this.zip = zip;
-			this.updateFileTypeConfig();
 			return this;
 		}
 	}, {
@@ -3712,20 +3705,22 @@ var Docxtemplater = function () {
 		key: "compile",
 		value: function compile() {
 			this.templatedFiles = this.fileTypeConfig.getTemplatedFiles(this.zip);
-			return this;
 		}
 	}, {
 		key: "updateFileTypeConfig",
 		value: function updateFileTypeConfig() {
 			this.fileType = this.zip.files["word/document.xml"] ? "docx" : "pptx";
-			this.fileTypeConfig = this.options.fileTypeConfig || Docxtemplater.FileTypeConfig[this.fileType];
-			return this;
+			if (this.fileType === "docx" || this.fileType === "pptx") {
+				this.fileTypeConfig = Docxtemplater.FileTypeConfig[this.fileType];
+			}
+			this.fileTypeConfig = this.options.fileTypeConfig || this.fileTypeConfig;
 		}
 	}, {
 		key: "render",
 		value: function render() {
 			var _this2 = this;
 
+			this.updateFileTypeConfig();
 			this.options.xmlFileNames = [];
 			this.modules = this.fileTypeConfig.baseModules.map(function (moduleFunction) {
 				return moduleFunction();
@@ -3809,11 +3804,13 @@ var Docxtemplater = function () {
 	}, {
 		key: "getFullText",
 		value: function getFullText(path) {
+			this.updateFileTypeConfig();
 			return this.createTemplateClass(path || this.fileTypeConfig.textPath).getFullText();
 		}
 	}, {
 		key: "getTemplatedFiles",
 		value: function getTemplatedFiles() {
+			this.updateFileTypeConfig();
 			this.compile();
 			return this.templatedFiles;
 		}
@@ -3828,5 +3825,5 @@ Docxtemplater.XmlTemplater = require("./xml-templater");
 Docxtemplater.FileTypeConfig = require("./file-type-config");
 Docxtemplater.XmlMatcher = require("./xml-matcher");
 module.exports = Docxtemplater;
-},{"./doc-utils":1,"./errors":2,"./file-type-config":3,"./module-wrapper":7,"./traits":16,"./xml-matcher":17,"./xml-templater":18}]},{},[])("/src/js/docxtemplater.js")
+},{"./doc-utils":1,"./errors":2,"./file-type-config":3,"./xml-matcher":17,"./xml-templater":18}]},{},[])("/src/js/docxtemplater.js")
 });
