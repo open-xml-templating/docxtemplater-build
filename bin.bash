@@ -24,7 +24,7 @@ mkdir build -p
 
 cd src
 
-for tag in $(git tag)
+for tag in $(git tag | sort --version-sort)
 do
 	cd ..
 	filename="$(pwd)""/build/docxtemplater.""$tag"".js"
