@@ -9,7 +9,7 @@ uglifyversion="$(uglifyjs --version)"
 
 echo "using : $uglifyversion"
 
-[[ "$uglifyversion" =~ "uglify-js 2." ]] || { echo "you need version 2.x of uglifyjs"; exit 1; }
+[[ "$uglifyversion" =~ "3." ]] || { echo "you need version 3.x of uglifyjs"; exit 1; }
 
 if [ ! -d src ]; then
 	git clone https://github.com/open-xml-templating/docxtemplater.git src
