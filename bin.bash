@@ -35,6 +35,8 @@ do
 	# Skipping Already existing versions
 	if [ -f "$filename" ] && [ -f "$minfilename" ]; then echo "Skipping $tag (file exists)" && continue; fi
 	echo "processing $tag"
+	git add .
+	git reset HEAD --hard
 	git checkout "$tag"
 	npm install
 	[ -f gulpfile.js ] && gulp allCoffee
