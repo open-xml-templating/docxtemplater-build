@@ -1,10 +1,8 @@
 #/usr/bin/bash
 
-set -e
-set -u
+set -euo pipefail
 
-npm install -g uglify-js browserify
-
+PATH="./node_modules/.bin:$PATH"
 uglifyversion="$(uglifyjs --version)"
 
 echo "using : $uglifyversion"
@@ -24,16 +22,8 @@ mkdir build -p
 
 cd src
 
-for tag in $(git tag | sort --version-sort)
-do
-	cd ..
-	filename="$(pwd)""/build/docxtemplater.""$tag"".js"
-	minfilename="$(pwd)""/build/docxtemplater.""$tag"".min.js"
-	cd src
-	# Skipping versions < 1.0
-	echo "$tag" | grep "v[123]" || continue
-	# Skipping Already existing versions
-	if [ -f "$filename" ] && [ -f "$minfilename" ]; then echo "Skipping $tag (file exists)" && continue; fi
+build(){
+	echo "$PWD"
 	echo "processing $tag"
 	git add .
 	git reset HEAD --hard
@@ -48,7 +38,7 @@ do
 		echo "running browserify"
 		startfilename="./src/js/docxgen.js"
 		[ -f "$startfilename" ] || startfilename="./src/js/docxtemplater.js"
-		browserify -r "$startfilename" -s Docxtemplater > "$filename"
+		browserify --global-transform aliasify -r "$startfilename" -s Docxtemplater > "$filename"
 		echo "running uglify"
 		uglifyjs "$filename" > "$minfilename" --verbose --ascii-only
 		echo "runned uglify"
@@ -59,5 +49,19 @@ do
 	git add .
 	git commit -am "$tag"
 	git tag "$tag"
+}
+echo "$(pwd)"
+
+for tag in $(git tag | sort --version-sort)
+do
+	# Skipping versions < 1.0
+	echo "$tag" | grep "v[123]" || continue
+	cd ..
+	filename="$(pwd)/build/docxtemplater.$tag.js"
+	minfilename="$(pwd)/build/docxtemplater.$tag.min.js"
+	cd src
+	# Skipping Already existing versions
+	if [ -f "$filename" ] && [ -f "$minfilename" ]; then echo "Skipping $tag (file exists)" && continue; fi
+	build
 	cd src
 done
