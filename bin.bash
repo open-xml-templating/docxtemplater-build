@@ -28,6 +28,7 @@ build(){
 	git add .
 	git reset HEAD --hard
 	git checkout "$tag"
+	tag_without_v="$(sed -E 's/^v//g' <<<"$tag")"
 	npm install
 	[ -f gulpfile.js ] && gulp allCoffee
 	npm test
@@ -43,6 +44,7 @@ build(){
 		uglifyjs "$filename" > "$minfilename" --verbose --ascii-only
 		echo "runned uglify"
 	fi
+	cat bower.json | jq '.version = "'"$tag_without_v"'"' | sponge bower.json
 	# Copy latest tag to docxtemplater-latest.{min,}.js
 	cp "$filename" build/docxtemplater-latest.js
 	cp "$minfilename" build/docxtemplater-latest.min.js
