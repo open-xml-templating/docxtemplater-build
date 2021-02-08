@@ -57,7 +57,9 @@ echo "$(pwd)"
 for tag in $(git tag | sort --version-sort)
 do
 	# Skipping versions < 1.0
-	echo "$tag" | grep "v[123]" || continue
+	grep -E "^v[123]" <<<"$tag" || continue
+	grep -E "^v3.17" <<<"$tag" && continue
+	echo "$tag"
 	cd ..
 	filename="$(pwd)/build/docxtemplater.$tag.js"
 	minfilename="$(pwd)/build/docxtemplater.$tag.min.js"
