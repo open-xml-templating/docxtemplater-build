@@ -1,18 +1,26 @@
-#/usr/bin/bash
+#/usr/bin/env bash
 
 set -euo pipefail
 
 PATH="./node_modules/.bin:$PATH"
-uglifyversion="$(uglifyjs --version)"
+if ! [ -d ./node_modules/.bin ]
+then
+	npm install
+fi
+
+uglifyversion="$(uglifyjs --version || true)"
+browserifyversion="$(browserify --version || true)"
 
 echo "using : $uglifyversion"
 
 [[ "$uglifyversion" =~ "3." ]] || { echo "you need version 3.x of uglifyjs"; exit 1; }
+[[ "$browserifyversion" =~ "16." ]] || { echo "you need version 16.x of browserify"; exit 1; }
 
 if [ ! -d src ]; then
 	git clone https://github.com/open-xml-templating/docxtemplater.git src
 else
 	cd src
+	git reset HEAD --hard
 	git checkout master
 	git pull
 	cd ..
