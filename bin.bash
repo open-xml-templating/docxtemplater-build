@@ -58,6 +58,7 @@ build(){
 	cp "$minfilename" build/docxtemplater-latest.min.js
 	git add .
 	git commit -am "$tag"
+	git tag --delete "$tag" || true
 	git tag "$tag"
 }
 echo "$(pwd)"
