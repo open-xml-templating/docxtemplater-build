@@ -37,7 +37,7 @@ build(){
 	git reset HEAD --hard
 	git checkout "$tag"
 	tag_without_v="$(sed -E 's/^v//g' <<<"$tag")"
-	npm install
+	npm install --legacy-peer-deps
 	[ -f gulpfile.js ] && gulp allCoffee
 	npm test
 	result=$?
