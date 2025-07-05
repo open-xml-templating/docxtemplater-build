@@ -26,6 +26,6 @@
   "dependencies": {
     "aliasify": "^2.1.0",
     "browserify": "^16.2.2",
-    "uglify-js": "^3.4.6"
+    "uglify-js": "^3.19.3"
   }
 }

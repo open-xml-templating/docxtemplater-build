@@ -49,7 +49,7 @@ build(){
 		[ -f "$startfilename" ] || startfilename="./src/js/docxtemplater.js"
 		browserify --global-transform aliasify -r "$startfilename" -s Docxtemplater > "$filename"
 		echo "running uglify"
-		uglifyjs "$filename" > "$minfilename" --verbose --ascii-only
+		uglifyjs "$filename" > "$minfilename" --verbose
 		echo "runned uglify"
 	fi
 	cat bower.json | jq '.version = "'"$tag_without_v"'"' | sponge bower.json
